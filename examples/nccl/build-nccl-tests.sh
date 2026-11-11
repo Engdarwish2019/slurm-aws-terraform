@@ -23,6 +23,9 @@ if ! command -v module >/dev/null 2>&1; then
   . /etc/profile.d/modules.sh
 fi
 module load mpi/openmpi-x86_64
+# EL keeps Open MPI's headers outside $MPI_HOME (in $MPI_INCLUDE), and some nccl-tests targets
+# only look in $MPI_HOME/include, so put the real directory on the compilers' search path.
+export CPATH="${MPI_INCLUDE:-$MPI_HOME/include}${CPATH:+:$CPATH}"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
