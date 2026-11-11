@@ -90,7 +90,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       - name: NCCL and Open MPI (the GPU nodes install the same)
-        run: dnf install -y libnccl-devel openmpi-devel environment-modules make tar gzip
+        run: dnf install -y libnccl-devel openmpi-devel environment-modules make tar gzip which diffutils
 
       - name: Build with the example script (compiling needs no GPU)
         env:

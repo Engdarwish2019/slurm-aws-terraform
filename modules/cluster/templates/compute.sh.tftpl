@@ -39,7 +39,7 @@ dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda
 dnf install -y cuda-drivers
 %{ if cuda_toolkit ~}
 log "CUDA toolkit and NCCL from the same repository, to build GPU code such as nccl-tests"
-dnf install -y cuda-toolkit libnccl libnccl-devel
+dnf install -y cuda-toolkit libnccl libnccl-devel which diffutils
 cat > /etc/profile.d/cuda.sh <<'PROFILE'
 export PATH=/usr/local/cuda/bin:$PATH
 PROFILE

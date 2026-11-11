@@ -13,6 +13,14 @@ TAG="healthcheck:"
 # 92 high single-bit ECC rate, 94/95 contained/uncontained ECC, 119/120 GSP firmware.
 CRITICAL_XIDS=" 48 63 64 74 79 92 94 95 119 120 "
 
+# Shared file systems that must be mounted and answering. Override per site in
+# /etc/sysconfig/node-healthcheck, for example HEALTHCHECK_MOUNTS="/shared/home /shared/apps".
+HEALTHCHECK_MOUNTS="/shared"
+if [ -r /etc/sysconfig/node-healthcheck ]; then
+  # shellcheck source=/dev/null
+  . /etc/sysconfig/node-healthcheck
+fi
+
 drain() {
   local reason="$TAG $*"
   logger -t node-healthcheck "$reason"
@@ -29,9 +37,11 @@ is_true() {
 
 node_info="$(scontrol show node "$NODE" 2>/dev/null || true)"
 
-# Shared file system: home directories, job binaries and results live there.
-mountpoint -q /shared || drain "/shared is not mounted"
-timeout 10 stat -t /shared >/dev/null 2>&1 || drain "/shared does not respond"
+# Shared file systems: home directories, job binaries and results live there.
+for mount in $HEALTHCHECK_MOUNTS; do
+  mountpoint -q "$mount" || drain "$mount is not mounted"
+  timeout 10 stat -t "$mount" >/dev/null 2>&1 || drain "$mount does not respond"
+done
 
 # MUNGE: without it slurmd cannot authenticate to the controller.
 munge -n 2>/dev/null | unmunge >/dev/null 2>&1 || drain "munge credential round trip failed"

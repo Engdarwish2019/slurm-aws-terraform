@@ -11,6 +11,13 @@ PREFIX="${1:-/shared/apps/nccl-tests/$VERSION}"
 CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 NCCL_HOME="${NCCL_HOME:-/usr}"
 
+# nccl-tests' makefiles find nvcc with `which` to pick the C++ standard; without it a CUDA 13
+# build fails with a misleading "libcu++ requires at least C++ 17" error.
+for tool in which cmp make curl tar sha256sum; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "missing $tool: dnf install -y which diffutils make curl tar" >&2; exit 1; }
+done
+[ -x "$CUDA_HOME/bin/nvcc" ] || { echo "no nvcc in $CUDA_HOME: run this on a GPU node with the CUDA toolkit" >&2; exit 1; }
+
 if ! command -v module >/dev/null 2>&1; then
   # shellcheck source=/dev/null
   . /etc/profile.d/modules.sh
