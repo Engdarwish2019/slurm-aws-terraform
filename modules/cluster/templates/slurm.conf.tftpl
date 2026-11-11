@@ -1,0 +1,57 @@
+# slurm.conf - rendered by Terraform. Compute nodes fetch it from slurmctld (configless mode).
+ClusterName=${cluster_name}
+SlurmctldHost=${head.name}(${head.ip})
+SlurmctldParameters=enable_configless
+
+AuthType=auth/munge
+CredType=cred/munge
+SlurmUser=slurm
+SlurmctldPort=6817
+SlurmdPort=6818
+
+StateSaveLocation=/var/spool/slurmctld
+SlurmdSpoolDir=/var/spool/slurmd
+SlurmctldPidFile=/run/slurm/slurmctld.pid
+SlurmdPidFile=/run/slurm/slurmd.pid
+SlurmctldLogFile=/var/log/slurm/slurmctld.log
+SlurmdLogFile=/var/log/slurm/slurmd.log
+SlurmctldDebug=info
+SlurmdDebug=info
+
+# Scheduling and resource isolation (cgroup v2 on EL9)
+SchedulerType=sched/backfill
+SelectType=select/cons_tres
+SelectTypeParameters=CR_Core_Memory
+DefMemPerCPU=1024
+ProctrackType=proctrack/cgroup
+TaskPlugin=task/cgroup,task/affinity
+ReturnToService=2
+SlurmctldTimeout=120
+SlurmdTimeout=300
+MinJobAge=300
+KillWait=30
+
+# Accounting
+AccountingStorageType=accounting_storage/slurmdbd
+AccountingStorageHost=${head.name}
+AccountingStorageEnforce=associations,limits
+JobAcctGatherType=jobacct_gather/cgroup
+JobAcctGatherFrequency=30
+%{ if length(gpu_nodes) > 0 ~}
+AccountingStorageTRES=gres/gpu
+GresTypes=gpu
+%{ endif ~}
+
+# Nodes
+%{ for n in compute_nodes ~}
+NodeName=${n.name} NodeAddr=${n.ip} CPUs=${compute.cpus} Boards=1 SocketsPerBoard=1 CoresPerSocket=${compute.cores} ThreadsPerCore=${compute.threads} RealMemory=${compute.memory} State=UNKNOWN
+%{ endfor ~}
+%{ for n in gpu_nodes ~}
+NodeName=${n.name} NodeAddr=${n.ip} CPUs=${gpu.cpus} Boards=1 SocketsPerBoard=1 CoresPerSocket=${gpu.cores} ThreadsPerCore=${gpu.threads} RealMemory=${gpu.memory} Gres=gpu:${gpu.gpus} State=UNKNOWN
+%{ endfor ~}
+
+# Partitions
+PartitionName=compute Nodes=${compute_list} Default=YES MaxTime=7-00:00:00 State=UP
+%{ if length(gpu_nodes) > 0 ~}
+PartitionName=gpu Nodes=${gpu_list} MaxTime=2-00:00:00 State=UP
+%{ endif ~}

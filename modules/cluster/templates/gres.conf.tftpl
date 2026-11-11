@@ -1,0 +1,4 @@
+# gres.conf - rendered by Terraform, served to GPU nodes in configless mode.
+%{ if gpu_list != "" ~}
+NodeName=${gpu_list} Name=gpu File=${device_files}
+%{ endif ~}

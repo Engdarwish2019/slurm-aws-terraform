@@ -1,0 +1,60 @@
+# ---------------------------------------------------------------------------
+# Compute node: slurmd in configless mode (slurm.conf comes from slurmctld)
+# ---------------------------------------------------------------------------
+log "Waiting for the MUNGE key from the head node"
+KEY=""
+for i in $(seq 1 90); do
+  KEY="$(aws ssm get-parameter --region "$REGION" --name "$MUNGE_PARAM" --with-decryption \
+    --query Parameter.Value --output text 2>/dev/null || true)"
+  if [ -n "$KEY" ] && [ "$KEY" != "pending" ]; then
+    break
+  fi
+  log "MUNGE key not published yet ($i/90)"
+  sleep 10
+done
+if [ -z "$KEY" ] || [ "$KEY" = "pending" ]; then
+  log "MUNGE key never arrived, giving up"
+  exit 1
+fi
+umask 077
+echo "$KEY" | base64 -d > /etc/munge/munge.key
+unset KEY
+umask 022
+chown munge:munge /etc/munge/munge.key
+chmod 0400 /etc/munge/munge.key
+restorecon -R /etc/munge || true
+systemctl enable --now munge
+
+echo 'SLURMD_OPTIONS="--conf-server ${head_name}:6817"' > /etc/sysconfig/slurmd
+%{ if is_gpu ~}
+
+log "GPU node: NVIDIA driver from the official CUDA repository"
+dnf install -y "kernel-devel-$(uname -r)" "kernel-headers-$(uname -r)" dkms
+dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel9/x86_64/cuda-rhel9.repo
+dnf install -y cuda-drivers
+systemctl enable nvidia-persistenced
+mkdir -p /etc/systemd/system/slurmd.service.d
+cat > /etc/systemd/system/slurmd.service.d/10-nvidia.conf <<'UNIT'
+[Unit]
+After=nvidia-persistenced.service
+Wants=nvidia-persistenced.service
+UNIT
+systemctl daemon-reload
+if lsmod | grep -q '^nouveau'; then
+  NEED_REBOOT=1
+else
+  modprobe nvidia
+  systemctl start nvidia-persistenced
+  nvidia-smi
+fi
+%{ endif ~}
+
+systemctl enable slurmd
+touch /var/lib/hpc-bootstrap.done
+if [ "$NEED_REBOOT" = "1" ]; then
+  log "Rebooting to load the NVIDIA driver; slurmd starts after boot"
+  systemctl reboot
+else
+  systemctl start slurmd
+  log "Compute node ready"
+fi

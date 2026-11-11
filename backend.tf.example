@@ -1,0 +1,11 @@
+# Copy to backend.tf to keep state in an encrypted, versioned S3 bucket.
+# use_lockfile (S3-native locking) needs Terraform 1.10 or later.
+terraform {
+  backend "s3" {
+    bucket       = "my-terraform-state-bucket"
+    key          = "hpc/slurm-aws-terraform.tfstate"
+    region       = "eu-central-1"
+    encrypt      = true
+    use_lockfile = true
+  }
+}

@@ -1,0 +1,72 @@
+#!/bin/bash
+# First-boot bootstrap shared by every node. Rendered by Terraform (templatefile).
+# Secrets are never written to this script: the MUNGE key travels through
+# SSM Parameter Store (KMS encrypted) and the database password is generated locally.
+set -euo pipefail
+exec > >(tee -a /var/log/hpc-bootstrap.log) 2>&1
+
+NODE_NAME="${node_name}"
+CLUSTER="${cluster_name}"
+REGION="${region}"
+MUNGE_PARAM="${munge_param}"
+KMS_KEY_ARN="${kms_key_arn}"
+EFS_DNS="${efs_dns_name}"
+SLURM_UID=450
+HPC_USER=hpcuser
+HPC_UID=2001
+NEED_REBOOT=0
+
+log() { echo "[bootstrap] $(date -Is) $*"; }
+
+log "Node $NODE_NAME of cluster $CLUSTER"
+hostnamectl set-hostname "$NODE_NAME"
+echo "preserve_hostname: true" > /etc/cloud/cloud.cfg.d/99-hpc-hostname.cfg
+cat >> /etc/hosts <<'HOSTS'
+%{ for h in hosts ~}
+${h.ip} ${h.name}
+%{ endfor ~}
+HOSTS
+
+log "Installing SSM agent (the only way in: no SSH, no public IP)"
+dnf install -y "https://s3.$REGION.amazonaws.com/amazon-ssm-$REGION/latest/linux_amd64/amazon-ssm-agent.rpm"
+systemctl enable --now amazon-ssm-agent
+
+log "Repositories and base packages"
+dnf install -y epel-release
+dnf config-manager --set-enabled crb
+dnf -y update --exclude='kernel*'
+
+# Same Slurm UID on every node, created before the packages are installed.
+getent group slurm >/dev/null || groupadd -r -g "$SLURM_UID" slurm
+getent passwd slurm >/dev/null || useradd -r -u "$SLURM_UID" -g slurm -d /var/lib/slurm -s /sbin/nologin -c "Slurm workload manager" slurm
+
+dnf install -y munge slurm slurm-slurmd nfs-utils unzip jq openmpi openmpi-devel gcc
+
+if ! command -v aws >/dev/null 2>&1; then
+  log "Installing AWS CLI v2"
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install
+  rm -rf /tmp/aws /tmp/awscliv2.zip
+fi
+export PATH="/usr/local/bin:$PATH"
+
+log "Mounting shared EFS at /shared"
+mkdir -p /shared
+echo "$EFS_DNS:/ /shared nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev 0 0" >> /etc/fstab
+for i in $(seq 1 60); do
+  mountpoint -q /shared && break
+  mount /shared || { log "EFS not reachable yet ($i/60)"; sleep 10; }
+done
+mountpoint -q /shared
+setsebool -P use_nfs_home_dirs 1
+
+log "Cluster user $HPC_USER (home on /shared)"
+getent group "$HPC_USER" >/dev/null || groupadd -g "$HPC_UID" "$HPC_USER"
+getent passwd "$HPC_USER" >/dev/null || useradd -u "$HPC_UID" -g "$HPC_USER" -d "/shared/home/$HPC_USER" -M -s /bin/bash "$HPC_USER"
+
+log "Slurm directories"
+mkdir -p /etc/slurm /var/log/slurm /var/spool/slurmd /var/spool/slurmctld
+chown slurm:slurm /var/log/slurm /var/spool/slurmd /var/spool/slurmctld
+echo "d /run/slurm 0755 slurm slurm -" > /etc/tmpfiles.d/slurm.conf
+systemd-tmpfiles --create /etc/tmpfiles.d/slurm.conf
