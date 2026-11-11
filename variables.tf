@@ -68,6 +68,12 @@ variable "gpu_instance_type" {
   default     = "g5.xlarge"
 }
 
+variable "alert_email" {
+  description = "Email address subscribed to the alerts topic (AWS sends a confirmation mail). Null: no subscription."
+  type        = string
+  default     = null
+}
+
 variable "gpu_cuda_toolkit" {
   description = "Install the CUDA toolkit and NCCL on GPU nodes (needed to build nccl-tests; adds a few minutes to the first boot)."
   type        = bool

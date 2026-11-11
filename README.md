@@ -63,6 +63,12 @@ flowchart LR
   (79 "fallen off the bus", 48 and 94/95 ECC, 119/120 GSP firmware...) drains the node with a
   `healthcheck:` reason, so no new job lands on broken hardware. When the checks pass again the node is
   resumed, but only if the script drained it, never a node an administrator drained by hand.
+- **Self-healing and alerting.** Every node has a CloudWatch alarm on the EC2 system status check:
+  EBS-only nodes are recovered automatically (same ID, IP and volumes on healthy hardware), while
+  instance types with local disks, such as g5, notify instead because EC2 cannot recover them. The
+  head node reboots itself if its OS hangs. These alarms, EFS approaching its I/O limit and AWS
+  Health notices for EC2 (scheduled maintenance, retirement) all go to one KMS-encrypted SNS
+  topic; set `alert_email` to subscribe.
 - **SELinux stays enforcing**, IMDSv2 is required, all volumes are encrypted with the cluster key and
   VPC flow logs go to an encrypted CloudWatch log group.
 
@@ -151,10 +157,11 @@ Every push runs:
 ```text
 .
 ├── main.tf / kms.tf / security.tf    root module: wiring, KMS key, security groups
+├── operations.tf                     alerts topic, EFS alarm, AWS Health events
 ├── modules/
 │   ├── network/                      VPC, subnets, NAT, flow logs
 │   ├── storage/                      EFS + backup policy
-│   └── cluster/                      instances, IAM, SSM parameter, Slurm templates,
+│   └── cluster/                      instances, IAM, SSM parameter, Slurm templates, EC2 alarms,
 │                                     node health check (files/node-healthcheck.sh)
 ├── examples/                         jobs: hello, MPI, GPU, NCCL tests, HPL
 └── scripts/push-slurm-conf.sh        day-2 config push through SSM

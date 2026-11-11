@@ -41,6 +41,18 @@ data "aws_iam_policy_document" "kms" {
       values   = ["arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"]
     }
   }
+
+  # CloudWatch alarms and EventBridge publish to the encrypted alerts topic (operations.tf).
+  statement {
+    sid       = "AllowAlertPublishers"
+    actions   = ["kms:Decrypt", "kms:GenerateDataKey*"]
+    resources = ["*"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudwatch.amazonaws.com", "events.amazonaws.com"]
+    }
+  }
 }
 
 resource "aws_kms_key" "cluster" {

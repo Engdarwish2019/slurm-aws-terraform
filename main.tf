@@ -55,6 +55,7 @@ module "cluster" {
   gpu_instance_type     = var.gpu_instance_type
   gpu_node_count        = var.gpu_node_count
   gpu_cuda_toolkit      = var.gpu_cuda_toolkit
+  alarm_topic_arn       = aws_sns_topic.alerts.arn
   root_volume_size      = var.root_volume_size
 
   depends_on = [module.storage]

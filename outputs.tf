@@ -27,3 +27,8 @@ output "slurm_conf_b64" {
   description = "Rendered slurm.conf (base64). Used by scripts/push-slurm-conf.sh after resizing."
   value       = module.cluster.slurm_conf_b64
 }
+
+output "alerts_topic_arn" {
+  description = "SNS topic for EC2 recovery, EFS and AWS Health alerts. Subscribe more endpoints here."
+  value       = aws_sns_topic.alerts.arn
+}

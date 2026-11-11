@@ -8,3 +8,6 @@ gpu_instance_type = "g5.xlarge"
 gpu_node_count    = 0
 # CUDA toolkit + NCCL on GPU nodes, to build nccl-tests (examples/nccl)
 gpu_cuda_toolkit = true
+
+# Alerts (EC2 recovery, EFS I/O limit, AWS Health): AWS mails a confirmation link first
+# alert_email = "you@example.com"

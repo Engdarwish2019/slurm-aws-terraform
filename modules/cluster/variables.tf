@@ -53,6 +53,12 @@ variable "gpu_instance_type" {
   type        = string
 }
 
+variable "alarm_topic_arn" {
+  description = "SNS topic for the EC2 status check alarms. Empty: recovery and reboot actions only."
+  type        = string
+  default     = ""
+}
+
 variable "gpu_cuda_toolkit" {
   description = "Install the CUDA toolkit and NCCL on GPU nodes."
   type        = bool
