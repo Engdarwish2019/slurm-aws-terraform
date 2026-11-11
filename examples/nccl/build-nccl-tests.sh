@@ -34,10 +34,14 @@ curl -fsSL "https://github.com/NVIDIA/nccl-tests/archive/refs/tags/$VERSION.tar.
 echo "$SHA256  $work/src.tar.gz" | sha256sum --check --quiet
 tar -xzf "$work/src.tar.gz" -C "$work"
 
+# Open MPI 4 (EL9) enables its deprecated C++ bindings whenever mpi.h is included from C++,
+# which then needs libmpi_cxx at link time. Nothing here uses them (Open MPI 5 removed them),
+# so skip them. CXX also feeds `nvcc -ccbin`, and nvcc accepts the -D itself.
 # NVCC_GENCODE limits the GPU architectures compiled for (faster builds), for example
 # NVCC_GENCODE="-gencode=arch=compute_86,code=sm_86" for the A10G in g5 instances.
 make -C "$work/nccl-tests-${VERSION#v}" -j "$(nproc)" \
   MPI=1 MPI_HOME="$MPI_HOME" CUDA_HOME="$CUDA_HOME" NCCL_HOME="$NCCL_HOME" \
+  CXX="${CXX:-g++} -DOMPI_SKIP_MPICXX=1" \
   ${NVCC_GENCODE:+NVCC_GENCODE="$NVCC_GENCODE"}
 
 mkdir -p "$PREFIX"
