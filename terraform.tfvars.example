@@ -6,3 +6,5 @@ compute_node_count    = 2
 # GPU partition (g5.xlarge = 1x NVIDIA A10G). Leave at 0 to save cost.
 gpu_instance_type = "g5.xlarge"
 gpu_node_count    = 0
+# CUDA toolkit + NCCL on GPU nodes, to build nccl-tests (examples/nccl)
+gpu_cuda_toolkit = true

@@ -26,12 +26,24 @@ restorecon -R /etc/munge || true
 systemctl enable --now munge
 
 echo 'SLURMD_OPTIONS="--conf-server ${head_name}:6817"' > /etc/sysconfig/slurmd
+
+log "Node health check (slurm.conf HealthCheckProgram drains the node on failure)"
+echo '${healthcheck}' | base64 -d > /usr/local/sbin/node-healthcheck
+chmod 0755 /usr/local/sbin/node-healthcheck
+restorecon /usr/local/sbin/node-healthcheck || true
 %{ if is_gpu ~}
 
 log "GPU node: NVIDIA driver from the official CUDA repository"
 dnf install -y "kernel-devel-$(uname -r)" "kernel-headers-$(uname -r)" dkms
 dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel9/x86_64/cuda-rhel9.repo
 dnf install -y cuda-drivers
+%{ if cuda_toolkit ~}
+log "CUDA toolkit and NCCL from the same repository, to build GPU code such as nccl-tests"
+dnf install -y cuda-toolkit libnccl libnccl-devel
+cat > /etc/profile.d/cuda.sh <<'PROFILE'
+export PATH=/usr/local/cuda/bin:$PATH
+PROFILE
+%{ endif ~}
 systemctl enable nvidia-persistenced
 mkdir -p /etc/systemd/system/slurmd.service.d
 cat > /etc/systemd/system/slurmd.service.d/10-nvidia.conf <<'UNIT'

@@ -61,6 +61,9 @@ locals {
     device_files = local.gpu_device_files
   })
 
+  # Shipped base64 so the script stays a plain, shellcheck-clean file (no template escaping).
+  healthcheck = base64encode(file("${path.module}/files/node-healthcheck.sh"))
+
   base_vars = {
     region       = data.aws_region.current.name
     cluster_name = var.name
@@ -156,8 +159,10 @@ resource "aws_instance" "compute" {
       hosts     = [local.head, local.compute_nodes[count.index]]
     })),
     templatefile("${path.module}/templates/compute.sh.tftpl", {
-      head_name = local.head.name
-      is_gpu    = false
+      head_name    = local.head.name
+      is_gpu       = false
+      cuda_toolkit = false
+      healthcheck  = local.healthcheck
     }),
   ])
 
@@ -204,8 +209,10 @@ resource "aws_instance" "gpu" {
       hosts     = [local.head, local.gpu_nodes[count.index]]
     })),
     templatefile("${path.module}/templates/compute.sh.tftpl", {
-      head_name = local.head.name
-      is_gpu    = true
+      head_name    = local.head.name
+      is_gpu       = true
+      cuda_toolkit = var.gpu_cuda_toolkit
+      healthcheck  = local.healthcheck
     }),
   ])
 

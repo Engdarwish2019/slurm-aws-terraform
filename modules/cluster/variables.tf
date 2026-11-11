@@ -53,6 +53,12 @@ variable "gpu_instance_type" {
   type        = string
 }
 
+variable "gpu_cuda_toolkit" {
+  description = "Install the CUDA toolkit and NCCL on GPU nodes."
+  type        = bool
+  default     = true
+}
+
 variable "gpu_node_count" {
   description = "Number of GPU nodes."
   type        = number

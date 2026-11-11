@@ -54,6 +54,7 @@ module "cluster" {
   compute_node_count    = var.compute_node_count
   gpu_instance_type     = var.gpu_instance_type
   gpu_node_count        = var.gpu_node_count
+  gpu_cuda_toolkit      = var.gpu_cuda_toolkit
   root_volume_size      = var.root_volume_size
 
   depends_on = [module.storage]

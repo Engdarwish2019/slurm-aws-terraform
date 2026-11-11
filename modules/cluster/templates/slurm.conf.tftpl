@@ -26,6 +26,11 @@ DefMemPerCPU=1024
 ProctrackType=proctrack/cgroup
 TaskPlugin=task/cgroup,task/affinity
 ReturnToService=2
+# Every 5 minutes slurmd runs the node health check, cycling through the nodes so they are not
+# all checked at once. The script drains a node on failure and resumes it when it recovers.
+HealthCheckProgram=/usr/local/sbin/node-healthcheck
+HealthCheckInterval=300
+HealthCheckNodeState=ANY,CYCLE
 SlurmctldTimeout=120
 SlurmdTimeout=300
 MinJobAge=300

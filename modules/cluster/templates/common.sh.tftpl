@@ -40,7 +40,7 @@ dnf -y update --exclude='kernel*'
 getent group slurm >/dev/null || groupadd -r -g "$SLURM_UID" slurm
 getent passwd slurm >/dev/null || useradd -r -u "$SLURM_UID" -g slurm -d /var/lib/slurm -s /sbin/nologin -c "Slurm workload manager" slurm
 
-dnf install -y munge slurm slurm-slurmd nfs-utils unzip jq openmpi openmpi-devel gcc
+dnf install -y munge slurm slurm-slurmd nfs-utils unzip jq openmpi openmpi-devel gcc make openblas-devel
 
 if ! command -v aws >/dev/null 2>&1; then
   log "Installing AWS CLI v2"

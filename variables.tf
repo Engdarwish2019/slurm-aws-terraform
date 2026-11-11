@@ -68,6 +68,12 @@ variable "gpu_instance_type" {
   default     = "g5.xlarge"
 }
 
+variable "gpu_cuda_toolkit" {
+  description = "Install the CUDA toolkit and NCCL on GPU nodes (needed to build nccl-tests; adds a few minutes to the first boot)."
+  type        = bool
+  default     = true
+}
+
 variable "gpu_node_count" {
   description = "Number of GPU nodes. Keep 0 unless you need the gpu partition, GPU instances are expensive."
   type        = number

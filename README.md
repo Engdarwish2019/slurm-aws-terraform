@@ -58,6 +58,11 @@ flowchart LR
   `aws_ec2_instance_type` data source, so changing the instance type keeps Slurm's node definition correct.
 - **Least privilege network.** Default security group is emptied, nodes talk to each other freely,
   egress is limited to HTTP/HTTPS and NFS to EFS, and the EFS mount target only accepts NFS from the nodes.
+- **Bad nodes take themselves out.** slurmd runs `node-healthcheck` every 5 minutes. A lost `/shared`
+  mount, broken MUNGE, a missing GPU, uncorrectable ECC errors, a pending row remap or a critical XID
+  (79 "fallen off the bus", 48 and 94/95 ECC, 119/120 GSP firmware...) drains the node with a
+  `healthcheck:` reason, so no new job lands on broken hardware. When the checks pass again the node is
+  resumed, but only if the script drained it, never a node an administrator drained by hand.
 - **SELinux stays enforcing**, IMDSv2 is required, all volumes are encrypted with the cluster key and
   VPC flow logs go to an encrypted CloudWatch log group.
 
@@ -108,6 +113,27 @@ terraform destroy
 
 The NAT gateway, EFS and instances are billed per hour, so destroy the lab when you are done.
 
+## Validating the cluster
+
+Checks and benchmarks for bringing up a cluster or a new GPU node. Copy the folders from
+[`examples/`](examples) into the cluster user's home (on `/shared`) and submit them as normal jobs:
+
+| What | How | Shows |
+|---|---|---|
+| Node health | Automatic: `HealthCheckProgram` in `slurm.conf` runs `modules/cluster/files/node-healthcheck.sh` | Nodes with broken storage, authentication or GPUs are drained (`sinfo -R`) |
+| GPU isolation | `sbatch gpu.sbatch` | A job sees only the GPU it was given (cgroup `ConstrainDevices`) |
+| GPU communication | `srun -p gpu -N 1 --gres=gpu:1 nccl/build-nccl-tests.sh`, then `sbatch nccl/nccl-tests.sbatch` | NCCL all-reduce across nodes with correct results, and the bus bandwidth to compare between runs |
+| CPU performance | `hpl/build-hpl.sh`, then `cd hpl && sbatch hpl.sbatch` | HPL (LINPACK) sized to 70% of memory on a near-square process grid: Gflops plus the residual check (`PASSED`) |
+| MPI | `sbatch mpi/mpi.sbatch` | Ranks start on every node through Slurm |
+
+The nccl-tests and HPL sources are pinned and verified against a SHA-256 checksum before they are
+built. GPU nodes install the CUDA toolkit and NCCL for this (`gpu_cuda_toolkit = true`, the default).
+
+```bash
+sinfo -R                                  # drain reasons, health check ones start with "healthcheck:"
+sudo journalctl -t node-healthcheck -f    # on a node: what the check found
+```
+
 ## CI
 
 Every push runs:
@@ -116,7 +142,9 @@ Every push runs:
 |---|---|
 | Terraform | `terraform fmt -check`, `terraform validate`, `tflint` (AWS ruleset) |
 | Security | `checkov` (results uploaded to GitHub code scanning), `gitleaks` |
-| Scripts | `shellcheck` on helper scripts and job examples |
+| Scripts | `shellcheck` on helper scripts, the node health check and every job example |
+| HPL | Builds HPL with `examples/hpl/build-hpl.sh` in Rocky Linux 9, runs it with Open MPI and requires the residual check to pass |
+| nccl-tests | Compiles nccl-tests with `examples/nccl/build-nccl-tests.sh` in NVIDIA's CUDA 13 Rocky Linux 9 image (compiling needs no GPU) |
 
 ## Repository layout
 
@@ -126,8 +154,9 @@ Every push runs:
 ├── modules/
 │   ├── network/                      VPC, subnets, NAT, flow logs
 │   ├── storage/                      EFS + backup policy
-│   └── cluster/                      instances, IAM, SSM parameter, Slurm templates
-├── examples/                         sbatch examples: hello, MPI, GPU
+│   └── cluster/                      instances, IAM, SSM parameter, Slurm templates,
+│                                     node health check (files/node-healthcheck.sh)
+├── examples/                         jobs: hello, MPI, GPU, NCCL tests, HPL
 └── scripts/push-slurm-conf.sh        day-2 config push through SSM
 ```
 

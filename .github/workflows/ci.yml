@@ -48,8 +48,59 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
-      - name: shellcheck scripts and job examples
-        run: shellcheck scripts/*.sh examples/*.sbatch examples/mpi/*.sbatch
+      - name: shellcheck scripts, node health check and job examples
+        run: shellcheck scripts/*.sh modules/cluster/files/*.sh examples/*.sbatch examples/*/*.sbatch examples/*/*.sh
+
+  hpl:
+    name: HPL builds and passes (Rocky Linux 9)
+    runs-on: ubuntu-latest
+    container: quay.io/rockylinux/rockylinux:9.8
+    env:
+      # Open MPI inside a container: no cross-memory attach, root allowed, more ranks than cores
+      OMPI_MCA_btl_vader_single_copy_mechanism: none
+      OMPI_ALLOW_RUN_AS_ROOT: 1
+      OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+
+      - name: The packages the cluster nodes install
+        run: |
+          dnf install -y dnf-plugins-core epel-release
+          dnf config-manager --set-enabled crb
+          dnf install -y openmpi-devel openblas-devel gcc make environment-modules tar gzip
+
+      - name: Build with the example script
+        run: bash examples/hpl/build-hpl.sh /opt/hpl
+
+      - name: Run a small HPL and require the residual check to pass
+        run: |
+          . /etc/profile.d/modules.sh
+          module load mpi/openmpi-x86_64
+          mkdir -p /tmp/hpl && cd /tmp/hpl
+          "$GITHUB_WORKSPACE/examples/hpl/hpl-dat.sh" 4000 192 1 2 > HPL.dat
+          OPENBLAS_NUM_THREADS=1 mpirun --oversubscribe -np 2 /opt/hpl/bin/xhpl | tee hpl.log
+          grep -E '^WR' hpl.log
+          grep -q PASSED hpl.log
+
+  nccl-tests:
+    name: nccl-tests compiles (CUDA 13, Rocky Linux 9)
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:13.5.0-devel-rockylinux9
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+
+      - name: NCCL and Open MPI (the GPU nodes install the same)
+        run: dnf install -y libnccl-devel openmpi-devel environment-modules make tar gzip
+
+      - name: Build with the example script (compiling needs no GPU)
+        env:
+          NVCC_GENCODE: -gencode=arch=compute_86,code=sm_86
+        run: bash examples/nccl/build-nccl-tests.sh /opt/nccl-tests
+
+      - name: The benchmarks exist
+        run: |
+          ls -l /opt/nccl-tests
+          test -x /opt/nccl-tests/all_reduce_perf
 
   security:
     name: checkov / gitleaks
